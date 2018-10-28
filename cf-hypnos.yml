@@ -13,10 +13,6 @@ Parameters:
     - rec
     - prod
 
-  DisplayName:
-    Description: Project name
-    Type: String
-    Default: hypnos
   TagBloc:
     Description: Tag bloc metier
     Type: String
