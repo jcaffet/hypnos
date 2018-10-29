@@ -15,18 +15,25 @@ fi
 
 case $env in
   dev|recprod)
-  zip hypnos-terminate.py.zip hypnos-terminate.py
-  HYPNOS_BUCKET=applications.${env}
-  aws s3 cp hypnos-terminate.py.zip s3://${HYPNOS_BUCKET}/hypnos/
-  echo "Updating ${env} account ..."
-  aws --profile=${env} cloudformation create-stack
-      --stack-name operations-hypnos-${env} \
-      --capabilities CAPABILITY_NAMED_IAM \
-      --template-body file://cf-hypnos.yml
-  ;;
-*)
-  echo "Unknown environment"
-  exit 1
-  ;;
+    echo "Zipping source"
+    zip hypnos-terminate.py.zip hypnos-terminate.py
+    echo "Copying source"
+    if [ $env == "recprod" ];then
+      HYPNOS_BUCKET=applications.rec
+    else
+      HYPNOS_BUCKET=applications.${env}
+    fi
+    aws --profile=${env} s3 cp hypnos-terminate.py.zip s3://${HYPNOS_BUCKET}/hypnos/
+    echo "Creating stack"
+    aws --profile=${env} cloudformation create-stack \
+        --stack-name operations-hypnos-${env} \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --template-body file://cf-hypnos.yml \
+        --parameters ParameterKey=Account,ParameterValue=${env}
+    ;;
+  *)
+    echo "Unknown environment"
+    exit 1
+    ;;
 esac
 

@@ -1,18 +1,16 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Stack managing non business hours instance actions
+Description: Stack managing begin and end of business hours instance actions
 
 Parameters:
 
-  Environment:
-    Description: Environment
+  Account:
+    Description: Account
     Type: String
     Default: dev
     AllowedValues:
     - dev
-    - rec
-    - prod
-
+    - recprod
   TagBloc:
     Description: Tag bloc metier
     Type: String
@@ -25,17 +23,22 @@ Parameters:
     Description: Tag composants
     Type: String
     Default: application
+  CronBeginBusinessHours:
+    Description: Hour to wake up infrastructure
+    Type: String
+    Default: "cron(0 7 ? * MON-FRI *)"
+  CronEndBusinessHours:
+    Description: Hour to stop infrastructure
+    Type: String
+    Default: "cron(0 19 ? * MON-FRI *)"
 
 Mappings:
 
-  EnvironmentMap:
+  AccountMap:
     dev:
       LambdaS3Bucket: "applications.dev"
-    rec:
-      LambdaS3Bucket: "operations.rec"
-    prod:
-      LambdaS3Bucket: "operations.prod"
-
+    recprod:
+      LambdaS3Bucket: "applications.rec"
 
 Resources:
 
@@ -80,24 +83,22 @@ Resources:
             - autoscaling:UpdateAutoScalingGroup
             - autoscaling:SuspendProcesses
             Resource:
-            - !Join ['', ['arn:aws:autoscaling:',!Ref 'AWS::Region',':',!Ref "AWS::AccountId",':autoScalingGroup:*:autoScalingGroupName/*']]
+            - !Sub 'arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/*'
 
-
-  HypnosTerminateLogGroup:
+  HypnosLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties: 
-      LogGroupName: !Sub '/aws/lambda/${TagBloc}-${TagApp}-${Environment}' 
+      LogGroupName: !Sub '/aws/lambda/${TagBloc}-${TagApp}-${Account}' 
       RetentionInDays: 30
 
-
-  HypnosTerminateInstances:
+  HypnosLambda:
     Type: "AWS::Lambda::Function"
     Properties: 
       Code:
-        S3Bucket: !FindInMap [EnvironmentMap, !Ref Environment, LambdaS3Bucket]
-        S3Key: "manage-instances/hypnos-terminate.py.zip"
+        S3Bucket: !FindInMap [AccountMap, !Ref Account, LambdaS3Bucket]
+        S3Key: "hypnos/hypnos-terminate.py.zip"
       Description: "Manage instance during non business hours"
-      FunctionName: !Sub '${TagBloc}-${TagApp}-${Environment}'
+      FunctionName: !Sub '${TagBloc}-${TagApp}-${Account}'
       Handler: "hypnos-terminate.lambda_handler"
       MemorySize: 128
       Role: !Sub ${HypnosLambdaRole.Arn}
@@ -105,7 +106,7 @@ Resources:
       Timeout: 60
       Tags:
       - Key: Env
-        Value: !Ref Environment
+        Value: !Ref Account
       - Key: Bloc
         Value: !Ref TagBloc
       - Key: Comp
@@ -113,47 +114,43 @@ Resources:
       - Key: App
         Value: !Ref TagApp
 
-
-  BeginningOfNonBusinessHoursEventRule:
+  EndOfBusinessHoursEventRule:
     Type: "AWS::Events::Rule"
     Properties: 
       Description: "Start of non-business hours actions"
-      Name: !Sub '${TagBloc}-${TagApp}-start-nonbusinesshours-${Environment}'
-      ScheduleExpression: "cron(0 18 ? * MON-FRI *)"
+      Name: !Sub '${TagBloc}-${TagApp}-start-nonbusinesshours-${Account}'
+      ScheduleExpression: !Ref CronEndBusinessHours
       State: "ENABLED"
       Targets:
-      - Arn: !Sub ${HypnosTerminateInstances.Arn}
-        Id: "operations-hypnos-dev"
+      - Arn: !Sub ${HypnosLambda.Arn}
+        Id: BeginningOfNonBusinessHoursEventRule
         Input : '{ "action": "stop" }'
 
-
-  PermissionForBeginningOfNonBusinessHoursToInvokeLambda:
+  PermissionForEndBusinessHoursToInvokeLambda:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref HypnosTerminateInstances
+      FunctionName: !Ref HypnosLambda
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !Sub ${BeginningOfNonBusinessHoursEventRule.Arn}
+      SourceArn: !Sub ${EndOfBusinessHoursEventRule.Arn}
 
-
-  EndOfNonBusinessHoursEventRule:
+  BeginOfBusinessHoursEventRule:
     Type: "AWS::Events::Rule"
     Properties:
       Description: "End of non-business hours actions"
-      Name: !Sub '${TagBloc}-${TagApp}-end-nonbusinesshours-${Environment}'
-      ScheduleExpression: "cron(0 6 ? * MON-FRI *)"
+      Name: !Sub '${TagBloc}-${TagApp}-end-nonbusinesshours-${Account}'
+      ScheduleExpression: !Ref CronBeginBusinessHours
       State: "ENABLED"
       Targets:
-      - Arn: !Sub ${HypnosTerminateInstances.Arn}
-        Id: "operations-hypnos-dev"
+      - Arn: !Sub ${HypnosLambda.Arn}
+        Id: BeginBusinessHoursEventRule
         Input : '{ "action": "start" }'
 
-
-  PermissionForEndOfNonBusinessHoursToInvokeLambda:
+  PermissionForBeginBusinessHoursToInvokeLambda:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref HypnosTerminateInstances
+      FunctionName: !Ref HypnosLambda
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !Sub ${EndOfNonBusinessHoursEventRule.Arn}
+      SourceArn: !Sub ${BeginOfBusinessHoursEventRule.Arn}
 
