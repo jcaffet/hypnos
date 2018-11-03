@@ -12,24 +12,26 @@ else
    exit 1;
 fi
 
-
 case $env in
-  dev|recprod)
+  corp)
     echo "Zipping source"
     zip hypnos-terminate.py.zip hypnos-terminate.py
     echo "Copying source"
-    if [ $env == "recprod" ];then
-      HYPNOS_BUCKET=applications.rec
-    else
-      HYPNOS_BUCKET=applications.${env}
-    fi
-    aws --profile=${env} s3 cp hypnos-terminate.py.zip s3://${HYPNOS_BUCKET}/hypnos/
+    HYPNOS_BUCKET=operations-services-corp
+    aws s3 cp hypnos-terminate.py.zip s3://${HYPNOS_BUCKET}/hypnos/
     echo "Creating stack"
-    aws --profile=${env} cloudformation create-stack \
-        --stack-name operations-hypnos-${env} \
+    aws cloudformation create-stack \
+        --stack-name operations-hypnos-central-${env} \
         --capabilities CAPABILITY_NAMED_IAM \
-        --template-body file://cf-hypnos.yml \
+        --template-body file://cf-hypnos-central.yml \
         --parameters ParameterKey=Account,ParameterValue=${env}
+    ;;
+  dev|recprod)
+    echo "Creating stacks"
+    aws --profile=${env} cloudformation create-stack \
+        --stack-name operations-hypnos-role-${env} \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --template-body file://cf-hypnos-role.yml
     ;;
   *)
     echo "Unknown environment"

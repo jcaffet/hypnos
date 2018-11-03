@@ -1,0 +1,43 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Stack providing cross account access
+
+Parameters:
+
+  CentralHypnosAccount:
+    Description: Corporate AWS account ID
+    Type: String
+    Default: 724130552230
+    ConstraintDescription: Must be a valid AWS account ID
+
+Resources:
+
+  HypnosManageInstancesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: hypnos-manage-instances
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:aws:iam::${CentralHypnosAccount}:root'
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: hypnos-start-stop-instances
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeInstances
+            - ec2:TerminateInstances
+            - ec2:StartInstances
+            - ec2:StopInstances
+            - autoscaling:ResumeProcesses
+            - autoscaling:DescribeAutoScalingGroups
+            - autoscaling:SuspendProcesses
+            - autoscaling:TerminateInstanceInAutoScalingGroup
+            Resource:
+            - '*'
+
