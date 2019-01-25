@@ -7,7 +7,6 @@ Parameters:
   CentralHypnosAccount:
     Description: Corporate AWS account ID
     Type: String
-    Default: 724130552230
     ConstraintDescription: Must be a valid AWS account ID
 
 Resources:

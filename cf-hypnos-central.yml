@@ -6,8 +6,8 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Accounts settings'
-        Parameters: ['Account', 'RecProdAccount', 'DevAccount']
+          default: 'Child Accounts'
+        Parameters: ['RecProdAccount', 'DevAccount', 'CorpAccount']
       - Label:
           default: 'Lambda settings'
         Parameters: ['LambdaS3Bucket', 'LambdaS3Prefix']
@@ -17,13 +17,14 @@ Metadata:
 
 Parameters:
 
-  Account:
-    Description: Account
+  Environment:
+    Description: Environment where Hypnos is installed
     Type: String
-    Default: dev
+    Default: corp
     AllowedValues:
     - dev
-    - recprod
+    - rec
+    - prod
     - corp
   RecProdAccount:
     Description: Production and recette AWS account ID
@@ -35,6 +36,12 @@ Parameters:
     Type: String
     Default: 629307289374
     ConstraintDescription: Must be a valid AWS account ID
+  CorpAccount:
+    Description: Corporate AWS account ID
+    Type: String
+    Default: 724130552230 
+    ConstraintDescription: Must be a valid AWS account ID
+
   ChildAccountRole:
     Description: Developmement AWS account ID
     Type: String
@@ -95,6 +102,7 @@ Resources:
             Resource:
             - !Sub 'arn:aws:iam::${DevAccount}:role/${ChildAccountRole}'
             - !Sub 'arn:aws:iam::${RecProdAccount}:role/${ChildAccountRole}'
+            - !Sub 'arn:aws:iam::${CorpAccount}:role/${ChildAccountRole}'
           - Effect: Allow
             Action:
             - logs:PutLogEvents
@@ -125,7 +133,7 @@ Resources:
   HypnosLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties: 
-      LogGroupName: !Sub '/aws/lambda/${TagBloc}-${TagApp}-${Account}' 
+      LogGroupName: !Sub '/aws/lambda/${TagBloc}-${TagApp}-${Environment}' 
       RetentionInDays: 30
 
   HypnosLambda:
@@ -135,7 +143,7 @@ Resources:
         S3Bucket: !Sub '${LambdaS3Bucket}'
         S3Key: !Sub '${LambdaS3Prefix}/hypnos-terminate.py.zip'
       Description: "Manage instance during non business hours"
-      FunctionName: !Sub '${TagBloc}-${TagApp}-${Account}'
+      FunctionName: !Sub '${TagBloc}-${TagApp}-${Environment}'
       Handler: "hypnos-terminate.lambda_handler"
       MemorySize: 128
       Role: !Sub ${HypnosLambdaRole.Arn}
@@ -143,7 +151,7 @@ Resources:
       Timeout: 60
       Tags:
       - Key: Env
-        Value: !Ref Account
+        Value: !Ref Environment
       - Key: Bloc
         Value: !Ref TagBloc
       - Key: Comp
@@ -155,10 +163,13 @@ Resources:
     Type: "AWS::Events::Rule"
     Properties: 
       Description: "Start of non-business hours actions"
-      Name: !Sub '${TagBloc}-${TagApp}-start-nonbusinesshours-${Account}'
+      Name: !Sub '${TagBloc}-${TagApp}-start-nonbusinesshours-${Environment}'
       ScheduleExpression: !Ref CronEndBusinessHours
       State: "ENABLED"
       Targets:
+      - Arn: !Sub ${HypnosLambda.Arn}
+        Id: EndOfBusinessHoursEventRule-CorpAccount
+        Input : !Sub '{ "action": "stop", "role_arn": "arn:aws:iam::${CorpAccount}:role/${ChildAccountRole}" }'
       - Arn: !Sub ${HypnosLambda.Arn}
         Id: EndOfBusinessHoursEventRule-DevAccount
         Input : !Sub '{ "action": "stop", "role_arn": "arn:aws:iam::${DevAccount}:role/${ChildAccountRole}" }'
@@ -179,15 +190,18 @@ Resources:
     Type: "AWS::Events::Rule"
     Properties:
       Description: "End of non-business hours actions"
-      Name: !Sub '${TagBloc}-${TagApp}-end-nonbusinesshours-${Account}'
+      Name: !Sub '${TagBloc}-${TagApp}-end-nonbusinesshours-${Environment}'
       ScheduleExpression: !Ref CronBeginBusinessHours
       State: "ENABLED"
       Targets:
       - Arn: !Sub ${HypnosLambda.Arn}
-        Id: EndOfBusinessHoursEventRule-DevAccount
+        Id: BeginOfBusinessHoursEventRule-CorpAccount
+        Input : !Sub '{ "action": "start", "role_arn": "arn:aws:iam::${CorpAccount}:role/${ChildAccountRole}" }'
+      - Arn: !Sub ${HypnosLambda.Arn}
+        Id: BeginOfBusinessHoursEventRule-DevAccount
         Input : !Sub '{ "action": "start", "role_arn": "arn:aws:iam::${DevAccount}:role/${ChildAccountRole}" }'
       - Arn: !Sub ${HypnosLambda.Arn}
-        Id: EndOfBusinessHoursEventRule-RecProdAccount
+        Id: BeginOfBusinessHoursEventRule-RecProdAccount
         Input : !Sub '{ "action": "start", "role_arn": "arn:aws:iam::${RecProdAccount}:role/${ChildAccountRole}" }'
 
   PermissionForBeginBusinessHoursToInvokeLambda:
