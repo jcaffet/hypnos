@@ -63,11 +63,10 @@ Parameters:
   LambdaS3Bucket:
     Description: Application Bucket
     Type: String
-    Default: operations-services-corp
   LambdaS3Prefix:
     Description: Application Prefix
     Type: String
-    Default: hypnos
+    Default: source
   CronBeginBusinessHours:
     Description: Hour to wake up infrastructure
     Type: String
