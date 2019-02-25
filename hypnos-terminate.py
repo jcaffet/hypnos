@@ -156,7 +156,7 @@ def retrieveInstancesTaggedToStopList(session):
     # instantiate empty array
     StoppedTaggedInstances = []
 
-    filters = [{'Name': 'tag:NonBusinessHoursState', 'Values': ['stopped']}]
+    filters = [{'Name': 'tag:'+tag_key, 'Values': [tag_value]}]
     for instance in ec2resource.instances.filter(Filters=filters):
         StoppedTaggedInstances.append(instance.id)
 
