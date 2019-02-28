@@ -14,11 +14,17 @@ else
    exit 1;
 fi
 
-echo "Zipping source"
-zip hypnos-terminate.py.zip hypnos-terminate.py
-echo "Copying source"
+echo "Zipping sources"
+zip hypnos-wrapper.py.zip hypnos-wrapper.py
+zip hypnos-stop-instances.py.zip hypnos-stop-instances.py
+
+echo "Copying sources"
 HYPNOS_BUCKET=hypnos-543476789297
-aws --profile=${profile} s3 cp hypnos-terminate.py.zip s3://${HYPNOS_BUCKET}/source/
+aws --profile=${profile} s3 cp . s3://${HYPNOS_BUCKET}/sources/ --recursive --exclude "*" --include "hypnos-*.py.zip"
+
+echo "Copying accounts file"
+aws --profile=${profile} s3 cp ./accounts.list s3://${HYPNOS_BUCKET}/config/ 
+
 echo "Creating stack"
 aws --profile=${profile} cloudformation create-stack \
     --stack-name hypnos-central \
