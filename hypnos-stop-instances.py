@@ -7,17 +7,25 @@ def lambda_handler(event, context):
 
     print("Received event : " + json.dumps(event, indent=2))
     action=event['action']
-    role_arn=event['role_arn']
+    role=event['role']
+    account=event['account']
+    mode=event['mode']
     print("Action : %s" % (action))
-    print("Role Arn : %s" % (role_arn))
+    print("Role to assume : %s" % (role))
+    print("Account to use : %s" % (account))
+    print("Mode : %s" % (mode))
 
     if action not in ["stop", "start", "list"]:
-        raise Exception('No action defined !')
+        raise Exception('No valid action defined !')
 
-    session = get_session(role_arn=role_arn, session_name='hypnos_lambda')
+    session = get_session(role=role, account=account, session_name='hypnos_lambda')
 
-    asgNameList = retreiveAsgList(session)
-    instancesTaggedForNbhStop = retrieveInstancesTaggedToStopList(session)
+    if mode == "tagged":
+      asgNameList = retreiveAsgList(session)
+      instancesTaggedForNbhStop = retrieveInstancesTaggedToStopList(session)
+    else:
+      asgNameList = retreiveAllAsgList(session)
+      instancesTaggedForNbhStop = retrieveAllStandaloneInstances(session)
 
     returnCode=True
 
@@ -66,12 +74,13 @@ def lambda_handler(event, context):
         'Return status' : returnCode
     }
 
-def get_session(role_arn=None, session_name='my_session'):
+def get_session(role=None, account=None, session_name='my_session'):
 
-    # If the role_arn is given : assumes a role and returns boto3 session
+    # If the role is given : assumes a role and returns boto3 session
     # otherwise : returns a regular session with the current IAM user/role
-    if role_arn:
+    if role:
         client = boto3.client('sts')
+        role_arn = 'arn:aws:iam::' + account + ':role/' + role
         response = client.assume_role(RoleArn=role_arn, RoleSessionName=session_name)
         session = boto3.Session(
             aws_access_key_id=response['Credentials']['AccessKeyId'],
@@ -134,6 +143,18 @@ def retreiveAsgList(session):
 
     return asgNameList
 
+def retreiveAllAsgList(session):
+
+    client = session.client('autoscaling')
+    response = client.describe_auto_scaling_groups(MaxRecords=100)
+    as_groups = response.get('AutoScalingGroups')
+
+    asgNameList=[]
+    for asg in as_groups:
+        asgNameList.append(asg.get('AutoScalingGroupName'))
+        
+    return asgNameList
+
 def retreiveInstancesToTerminateList(session, asgNameList):
 
     instance_ids=[]
@@ -161,6 +182,21 @@ def retrieveInstancesTaggedToStopList(session):
         StoppedTaggedInstances.append(instance.id)
 
     return StoppedTaggedInstances
+
+def retrieveAllStandaloneInstances(session):
+
+    ec2resource = session.resource('ec2')
+    
+    # get a list of all instances
+    all_running_instances = [i for i in ec2resource.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])]
+
+    # get instances which belong to an ASG
+    asg_instances = [i for i in ec2resource.instances.filter(Filters=[{'Name': 'tag-key', 'Values': ['aws:autoscaling:groupName']}])]
+
+    # filter from all instances_asg the instances that are not in the filtered list
+    instances_id_to_stop = [running.id for running in all_running_instances if running.id not in [i.id for i in asg_instances]]
+        
+    return instances_id_to_stop
 
 def stopInstances(session, ec2instanceIds):
 
@@ -203,3 +239,4 @@ def isExistsAsg(session, asgName):
         return False
     else:
         return True
+
