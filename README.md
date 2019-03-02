@@ -14,7 +14,7 @@ In the morning of business day :
 - resumes the auto-scaling groups activity, which triggers the new instances creation
 - starts standalone EC2 instances 
 
-Hypnos works for multiple accounts : just add them in the file stored in S3
+Hypnos handles all the regions of the target accounts. It works for multiple accounts : just add them in the file stored in S3.
 
 It is also capable of two modes :
 - all : handles of ressources of the account
@@ -39,7 +39,7 @@ The two Cloudwatch rules trigger the wrapper lambda depending on the configured 
 
 ### Wrapper Lambda
 
-There is one wrapper Lambda in the central account triggered by Cloudwatch Event rules. It collects from an S3 bucket the accounts list to perform and asynchronously invokes lambda for each target account.
+There is one wrapper Lambda in the central account triggered by Cloudwatch Event rules. It collects from an S3 bucket the accounts list to perform and asynchronously invokes lambda for each target account and each regions.
 
 The wrapper lambda needs one parameters :
 - action : start, stop or list
@@ -51,6 +51,7 @@ The business lambda assumes a role on the external child account and performs th
 The Lambda needs three parameters :
 - action : start, stop or list
 - account : AWS account to work with
+- region : AWS region to work with
 - mode : use "all" to handle all the autoscaling groups and EC2 instances. Or use "tagged" to only work with tagged instances.
 
 For a stop action, Hypnos Lambda :
@@ -66,7 +67,10 @@ For a list action, Hypnos Lambda :
 
 ## How to use Hypnos as a child account user
 
-In the child account point of view, there is no business logic to develop. The only thing to do is to add the appropriate tag to the concerned ressouces : NonBusinessHoursState 
+In the child account point of view, there is no business logic to develop. The only thing to do is to 
+- add the appropriate tag to the concerned ressouces : NonBusinessHoursState 
+- deploy the child role stack
+- specify the account in the S3 config bucket
 
 The NonBusinessHoursState tag values could be :
 - terminated : for auto-scaling groups, terminates the attached instances
@@ -97,5 +101,4 @@ And retreive the value later for the tag value :
 ## Limitations
 
 - only supports up to 100 autoscaling groups per account
-- only takes into account the same AWS region
 
