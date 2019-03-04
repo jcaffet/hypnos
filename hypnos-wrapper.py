@@ -4,23 +4,37 @@ import os
 
 def lambda_handler(event, context):
 
-    print("Received event : " + json.dumps(event, indent=2))
+    print("Event received : " + json.dumps(event, indent=2))
+    
     action=event['action']
     print("Action : %s" % (action))
-
-    ROLE = os.environ['ROLE_TO_ASSUME']
-    LAMBDA_TO_CALL = os.environ['LAMBDA_TO_CALL']
-
     if action not in ["stop", "start", "list"]:
         raise Exception('No valid action defined !')
 
-    accountList=getAccountsList()
-    if type(accountList) != list:
+    ROLE = os.environ['ROLE_TO_ASSUME']
+    print("ROLE : %s" % (ROLE))
+    
+    LAMBDA_TO_CALL = os.environ['LAMBDA_TO_CALL']
+    print("LAMBDA_TO_CALL : %s" % (LAMBDA_TO_CALL))
+    
+    CONFIGFILE_BUCKET = os.environ['CONFIGFILE_BUCKET']
+    print("CONFIGFILE_BUCKET : %s" % (CONFIGFILE_BUCKET))
+    
+    CONFIGFILE_NAME = os.environ['CONFIGFILE_NAME']
+    print("CONFIGFILE_NAME : %s" % (CONFIGFILE_NAME))
+
+    accountList = getAccountsList(CONFIGFILE_BUCKET, CONFIGFILE_NAME)
+    if type(accountList) == list:
+        print("Accounts list : %s" % (accountList))
+    else:
         raise Exception('No valid list of accounts !')
 
     regions = getAllAwsRegionsNames()
-    print("Available regions : %s" % (regions))
-    
+    if type(regions) == list:
+        print("Regions list : %s" % (regions))
+    else:
+        raise Exception('No valid list of accounts !')
+
     client = boto3.client('lambda')
     for account in accountList:
         for region in regions:
@@ -41,22 +55,19 @@ def getAllAwsRegionsNames():
     regionNames = [region['RegionName'] for region in client.describe_regions()['Regions']]
     return regionNames
 
+def getAccountsList(configFileBucket, configFileName):
 
-def getAccountsList():
-
-    CONFIGFILE_BUCKET = os.environ['CONFIGFILE_BUCKET']
-    CONFIGFILE_NAME = os.environ['CONFIGFILE_NAME']
     tempFile = '/tmp/accounts.list'
     accountList=[]
-    print(CONFIGFILE_BUCKET)
-    print(CONFIGFILE_NAME)
+
     s3client = boto3.client('s3')
-    s3client.download_file(CONFIGFILE_BUCKET, CONFIGFILE_NAME, tempFile)
+    s3client.download_file(configFileBucket, configFileName, tempFile)
     #print(open(tempFile).read())
+    
+    # extract account from the file and avoid comments
     for line in open(tempFile):
       li=line.strip()
       if not li.startswith("#"):
         accountList.append(line.rstrip())
     return accountList
-
 

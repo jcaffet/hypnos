@@ -16,7 +16,7 @@ fi
 
 echo "Zipping sources"
 zip hypnos-wrapper.py.zip hypnos-wrapper.py
-zip hypnos-stop-instances.py.zip hypnos-stop-instances.py
+zip hypnos-central.py.zip hypnos-central.py
 
 echo "Copying sources"
 HYPNOS_BUCKET=hypnos-543476789297
