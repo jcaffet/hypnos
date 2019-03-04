@@ -7,7 +7,7 @@ Metadata:
     ParameterGroups:
       - Label:
           default: 'Lambda settings'
-        Parameters: ['LambdaS3Bucket', 'LambdaS3Prefix']
+        Parameters: ['LambdaS3Bucket', 'LambdaSourcesS3Prefix', 'LambdaConfigS3File']
       - Label:
           default: 'Cloudwatch event rules'
         Parameters: ['CronBeginBusinessHours', 'CronEndBusinessHours']
@@ -41,10 +41,14 @@ Parameters:
   LambdaS3Bucket:
     Description: Application Bucket
     Type: String
-  LambdaS3Prefix:
+  LambdaSourcesS3Prefix:
     Description: Application Prefix
     Type: String
     Default: sources
+  LambdaConfigS3File:
+    Description: location of the configuration file
+    Type: String
+    Default: config/accounts.list
 
   CronBeginBusinessHours:
     Description: Hour to wake up infrastructure
@@ -58,10 +62,10 @@ Parameters:
 
 Resources:
 
-  HypnosLambdaRole:
+  HypnosCentralLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: hypnos-lambda-role
+      RoleName: hypnos-central-lambda-role
       AssumeRolePolicyDocument:
         Statement:
         - Effect: Allow
@@ -71,14 +75,9 @@ Resources:
           - sts:AssumeRole
       Path: "/"
       Policies:
-      - PolicyName: instances-management-allow
+      - PolicyName: write-cloudwatch-logs-allow
         PolicyDocument:
           Statement:
-          - Effect: "Allow"
-            Action:
-            - "sts:AssumeRole"
-            Resource:
-            - !Sub 'arn:aws:iam::*:role/${ChildAccountRole}'
           - Effect: Allow
             Action:
             - logs:PutLogEvents
@@ -86,43 +85,32 @@ Resources:
             - logs:CreateLogStream
             Resource:
             - "arn:aws:logs:*:*:*"
-          - Effect: Allow
+      - PolicyName: assume-hypnos-child-role-allow
+        PolicyDocument:
+          Statement:
+          - Effect: "Allow"
             Action:
-            - ec2:DescribeInstances
-            - autoscaling:DescribeAutoScalingGroups
+            - "sts:AssumeRole"
             Resource:
-            - "*"
-          - Effect: Allow
-            Action:
-            - ec2:TerminateInstances
-            Resource:
-            - "arn:aws:ec2:*:*:instance/*"
-          - Effect: Allow
-            Action:
-            - autoscaling:ResumeProcesses
-            - autoscaling:SetDesiredCapacity
-            - autoscaling:UpdateAutoScalingGroup
-            - autoscaling:SuspendProcesses
-            Resource:
-            - !Sub 'arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/*'
+            - !Sub 'arn:aws:iam::*:role/${ChildAccountRole}'
 
-  HypnosLogGroup:
+  HypnosCentralLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties: 
-      LogGroupName: !Sub '/aws/lambda/${TagApp}-${Environment}' 
+      LogGroupName: !Sub '/aws/lambda/${HypnosCentralLambda}'
       RetentionInDays: 30
 
-  HypnosLambda:
+  HypnosCentralLambda:
     Type: "AWS::Lambda::Function"
     Properties: 
       Code:
         S3Bucket: !Sub '${LambdaS3Bucket}'
-        S3Key: !Sub '${LambdaS3Prefix}/hypnos-stop-instances.py.zip'
+        S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-central.py.zip'
       Description: "Manage instance during non business hours"
-      FunctionName: !Sub '${TagApp}-${Environment}'
-      Handler: "hypnos-stop-instances.lambda_handler"
+      FunctionName: !Sub '${TagApp}-central-${Environment}'
+      Handler: "hypnos-central.lambda_handler"
       MemorySize: 128
-      Role: !Sub ${HypnosLambdaRole.Arn}
+      Role: !Sub ${HypnosCentralLambdaRole.Arn}
       Runtime: "python3.6"
       Timeout: 60
       Tags:
@@ -136,7 +124,7 @@ Resources:
   HypnosWrapperLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: hypnos-wrapper-access
+      RoleName: hypnos-wrapper-lambda-role
       AssumeRolePolicyDocument:
         Statement:
         - Effect: Allow
@@ -146,15 +134,15 @@ Resources:
           - sts:AssumeRole
       Path: "/"
       Policies:
-      - PolicyName: invoke-lambda-allow
+      - PolicyName: invoke-hypnos-central-lambda-allow
         PolicyDocument:
           Statement:
           - Effect: "Allow"
             Action:
             - lambda:InvokeFunction
             Resource:
-            - !Sub "arn:aws:lambda:*:${AWS::AccountId}:function:${TagApp}-*"
-      - PolicyName: cloudwatch-logs-allow
+            - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${HypnosCentralLambda}"
+      - PolicyName: write-cloudwatch-logs-allow
         PolicyDocument:
           Statement:
           - Effect: "Allow"
@@ -164,23 +152,35 @@ Resources:
             - logs:CreateLogStream
             Resource:
             - "arn:aws:logs:*:*:*"
-      - PolicyName: accessConfigBucketPolicy
+      - PolicyName: get-s3-file-config-allow
         PolicyDocument:
           Statement:
           - Effect: "Allow"
             Action:
-            - "s3:ListBucket"
             - "s3:GetObject"
             Resource:
-            - !Sub "arn:aws:s3:::${LambdaS3Bucket}"
-            - !Sub "arn:aws:s3:::${LambdaS3Bucket}/*"
+            - !Sub "arn:aws:s3:::${LambdaS3Bucket}/${LambdaConfigS3File}"
+      - PolicyName: describe-regions-allow
+        PolicyDocument:
+          Statement:
+          - Effect: "Allow"
+            Action:
+            - "ec2:DescribeRegions"
+            Resource:
+            - "*"
+
+  HypnosWrapperLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${HypnosWrapperLambda}'
+      RetentionInDays: 30
 
   HypnosWrapperLambda:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
         S3Bucket: !Sub '${LambdaS3Bucket}'
-        S3Key: !Sub '${LambdaS3Prefix}/hypnos-wrapper.py.zip'
+        S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-wrapper.py.zip'
       Description: "Launch all the child Lambda by account"
       FunctionName: !Sub '${TagApp}-wrapper-${Environment}'
       Handler: "hypnos-wrapper.lambda_handler"
@@ -190,10 +190,10 @@ Resources:
       Timeout: 60
       Environment:
         Variables:
-          LAMBDA_TO_CALL: !Sub '${HypnosLambda}'
+          LAMBDA_TO_CALL: !Sub '${HypnosCentralLambda}'
           ROLE_TO_ASSUME: "hypnos-manage-instances"
           CONFIGFILE_BUCKET: !Sub '${LambdaS3Bucket}'
-          CONFIGFILE_NAME: "config/accounts.list"
+          CONFIGFILE_NAME: !Sub '${LambdaConfigS3File}'
       Tags:
       - Key: Env
         Value: !Ref Environment
