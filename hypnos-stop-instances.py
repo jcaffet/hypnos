@@ -9,16 +9,18 @@ def lambda_handler(event, context):
     action=event['action']
     role=event['role']
     account=event['account']
+    region=event['region']
     mode=event['mode']
     print("Action : %s" % (action))
     print("Role to assume : %s" % (role))
     print("Account to use : %s" % (account))
+    print("Region : %s" % (region))
     print("Mode : %s" % (mode))
 
     if action not in ["stop", "start", "list"]:
         raise Exception('No valid action defined !')
 
-    session = get_session(role=role, account=account, session_name='hypnos_lambda')
+    session = get_session(role=role, account=account, region=region, session_name='hypnos_lambda')
 
     if mode == "tagged":
       asgNameList = retreiveAsgList(session)
@@ -74,7 +76,7 @@ def lambda_handler(event, context):
         'Return status' : returnCode
     }
 
-def get_session(role=None, account=None, session_name='my_session'):
+def get_session(role=None, account=None, region=None, session_name='my_session'):
 
     # If the role is given : assumes a role and returns boto3 session
     # otherwise : returns a regular session with the current IAM user/role
@@ -85,7 +87,8 @@ def get_session(role=None, account=None, session_name='my_session'):
         session = boto3.Session(
             aws_access_key_id=response['Credentials']['AccessKeyId'],
             aws_secret_access_key=response['Credentials']['SecretAccessKey'],
-            aws_session_token=response['Credentials']['SessionToken'])
+            aws_session_token=response['Credentials']['SessionToken'],
+            region_name=region)
         return session
     else:
         return boto3.Session()

@@ -18,33 +18,45 @@ def lambda_handler(event, context):
     if type(accountList) != list:
         raise Exception('No valid list of accounts !')
 
+    regions = getAllAwsRegionsNames()
+    print("Available regions : %s" % (regions))
+    
     client = boto3.client('lambda')
-
     for account in accountList:
-        print ("Launching action %s on %s account with role %s" % (action, account,ROLE))
-        response = client.invoke(
-            FunctionName=LAMBDA_TO_CALL,
-            InvocationType='Event',
-            Payload=json.dumps({'action': action, 'account': account, 'role': ROLE, 'mode': 'tagged'})
-        )
+        for region in regions:
+            print ("Launching action %s on %s account for %s with role %s" % (action, account, region, ROLE))
+            response = client.invoke(
+                FunctionName=LAMBDA_TO_CALL,
+                InvocationType='Event',
+                Payload=json.dumps({'action': action,
+                                    'account': account,
+                                    'region': region,
+                                    'role': ROLE,
+                                    'mode': 'tagged'})
+            )
 
-def getAccountsFromOu(OrganizationUnit):
-    client = boto3.client('organizations')
-    accountsFromOu = client.list_accounts_for_parent(ParentId=OrganizationUnit)
-    accounts = [account['Id'] for account in accountsFromOu['Accounts']]
-    return accountsIds
+def getAllAwsRegionsNames():
+
+    client = boto3.client('ec2')
+    regionNames = [region['RegionName'] for region in client.describe_regions()['Regions']]
+    return regionNames
+
 
 def getAccountsList():
+
     CONFIGFILE_BUCKET = os.environ['CONFIGFILE_BUCKET']
     CONFIGFILE_NAME = os.environ['CONFIGFILE_NAME']
     tempFile = '/tmp/accounts.list'
     accountList=[]
-
+    print(CONFIGFILE_BUCKET)
+    print(CONFIGFILE_NAME)
     s3client = boto3.client('s3')
     s3client.download_file(CONFIGFILE_BUCKET, CONFIGFILE_NAME, tempFile)
+    #print(open(tempFile).read())
     for line in open(tempFile):
       li=line.strip()
       if not li.startswith("#"):
         accountList.append(line.rstrip())
     return accountList
+
 
