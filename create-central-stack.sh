@@ -19,7 +19,7 @@ zip hypnos-wrapper.py.zip hypnos-wrapper.py
 zip hypnos-central.py.zip hypnos-central.py
 
 echo "Copying sources"
-HYPNOS_BUCKET=hypnos-543476789297
+HYPNOS_BUCKET=hypnos-460863991257
 aws --profile=${profile} s3 cp . s3://${HYPNOS_BUCKET}/sources/ --recursive --exclude "*" --include "hypnos-*.py.zip"
 
 echo "Copying accounts file"

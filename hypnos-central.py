@@ -130,10 +130,7 @@ def resumeAsgList(session, asgNameList):
 
     return returnValue
 
-def retreiveAsgList(session):
-
-    tag_key = 'NonBusinessHoursState'
-    tag_value = 'terminated'
+def retreiveAsgList(session, tag_key = 'NonBusinessHoursState', tag_value = 'terminated'):
 
     client = session.client('autoscaling')
     paginator = client.get_paginator('describe_auto_scaling_groups')
@@ -169,17 +166,11 @@ def retreiveInstancesToTerminateList(session, asgNameList):
 
     return instance_ids
 
-def retrieveInstancesTaggedToStopList(session):
-
-    # Retrieve Instance by Tag
-    tag_key = 'NonBusinessHoursState'
-    tag_value = 'stopped'
+def retrieveInstancesTaggedToStopList(session, tag_key = 'NonBusinessHoursState', tag_value = 'stopped'):
 
     ec2resource = session.resource('ec2')
 
-    # instantiate empty array
     StoppedTaggedInstances = []
-
     filters = [{'Name': 'tag:'+tag_key, 'Values': [tag_value]}]
     for instance in ec2resource.instances.filter(Filters=filters):
         StoppedTaggedInstances.append(instance.id)
