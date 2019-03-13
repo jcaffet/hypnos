@@ -41,7 +41,12 @@ The Cloudwatch rule periodicaly triggers the wrapper lambda depending on the con
 
 There is one wrapper Lambda in the central account triggered by Cloudwatch Event rules. It collects accounts information in a Dynamo table to perform and asynchronously invokes lambda for each target account and each regions.
 
-The wrapper lambda is launched periodicaly by the Cloudwatch rule.
+The information per item in the DynamoDB table must be :
+- accountId (S)
+- activeBeginWorkingHours (BOOL)
+- activeEndWorkingHours (BOOL)
+- beginWorkingHoursUtc (S)
+- endWorkingHoursUtc (S)
 
 The Lambda needs one parameter :
 - mode : use "run" to perforn actions or "dryrun" to just list actions and concerned ressources.
