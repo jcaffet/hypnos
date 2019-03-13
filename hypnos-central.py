@@ -6,44 +6,41 @@ import os
 def lambda_handler(event, context):
 
     print("Received event : " + json.dumps(event, indent=2))
-    action=event['action']
+    
     role=event['role']
     account=event['account']
     region=event['region']
-    mode=event['mode']
-    print("Action : %s" % (action))
     print("Role to assume : %s" % (role))
     print("Account to use : %s" % (account))
     print("Region : %s" % (region))
-    print("Mode : %s" % (mode))
-
-    if action not in ["stop", "start", "list"]:
-        raise Exception('No valid action defined !')
+    
+    action=event['action']
+    if action in ["stop", "start", "list"]:
+        print("Action : %s" % (action))
+    else:
+        raise Exception('No valid action value defined !')
 
     session = get_session(role=role, account=account, region=region, session_name='hypnos_lambda')
 
-    if mode == "tagged":
-      asgNameList = retreiveAsgList(session)
-      instancesTaggedForNbhStop = retrieveInstancesTaggedToStopList(session)
-    else:
-      asgNameList = retreiveAllAsgList(session)
-      instancesTaggedForNbhStop = retrieveAllStandaloneInstances(session)
-
     returnCode=True
-
     if action == "start":
-        print("Number of autoscalings concerned by instance termination : %s" % (len(asgNameList)))
-        print("AutoScalingGroups concerned by instance termination  : %s" % (asgNameList))
-        returnCode = resumeAsgList(session, asgNameList)
-        if len(instancesTaggedForNbhStop) > 0:
-            print("Starting %s instances" % (len(instancesTaggedForNbhStop)))
-            print("EC2 instances list to start : %s" % (instancesTaggedForNbhStop))
-            if not startInstances(session, instancesTaggedForNbhStop):
+        # resumes tagged ASG activity which will start their linked instances
+        asgNameListToStart = retreiveTaggedAsgList(session, tag_key = 'WorkingHoursState', tag_value = 'running')
+        print("Number of autoscalings concerned by instance termination : %s" % (len(asgNameListToStart)))
+        print("AutoScalingGroups concerned by instance termination  : %s" % (asgNameListToStart))
+        returnCode = resumeAsgList(session, asgNameListToStart)
+        # start all single instances tagged to running
+        instanceIdListToStart = retrieveTaggedInstancesList(session, tag_key = 'WorkingHoursState', tag_value = 'running')
+        if len(instanceIdListToStart) > 0:
+            print("Starting %s instances" % (len(instanceIdListToStart)))
+            print("EC2 instances list to start : %s" % (instanceIdListToStart))
+            if not startInstances(session, instanceIdListToStart):
                 returnCode=False
             else:
                 print("No EC2 instance to start.")
-
     elif action == "stop":
+        # suspends tagged ASG activity and terminates their linked instances
+        asgNameListToStop = retreiveTaggedAsgList(session, tag_key = 'WorkingHoursState', tag_value = 'stopped')
         returnCode=suspendAsgList(session, asgNameList)
         instancesToTerminate = retreiveInstancesToTerminateList(session, asgNameList)
         # terminate instances linked to a concerned autoscaling group
@@ -54,24 +51,25 @@ def lambda_handler(event, context):
                 returnCode=False
         else:
             print("No EC2 instance to terminate.")
-        # stop concerned single instances
-        if len(instancesTaggedForNbhStop) > 0:
-            print("Number of EC2 instances to stop: %s " % (len(instancesTaggedForNbhStop)))
-            print("EC2 instances list to stop : %s" % (instancesTaggedForNbhStop))
-            if not stopInstances(session, instancesTaggedForNbhStop):
+        # stop all single instances tagged to stopped
+        instanceIdListToStop = retrieveTaggedInstancesList(session, tag_key = 'NonWorkingHoursState', tag_value = 'stopped')
+        if len(instanceIdListToStop) > 0:
+            print("Number of EC2 instances to stop: %s " % (len(instanceIdListToStop)))
+            print("EC2 instances list to stop : %s" % (instanceIdListToStop))
+            if not stopInstances(session, instanceIdListToStop):
                 returnCode=False
         else:
             print("No EC2 instance to stop.")
     elif action == "list":
         # dryrun only
-        instancesToTerminate = retreiveInstancesToTerminateList(session, asgNameList)
-        print("Number of autoscalings concerned by instance termination : %s" % (len(asgNameList)))
-        print("AutoScalingGroups concerned by instance termination  : %s" % (asgNameList))
-        print("Number of EC2 instances that are concerned for terminate: %s " % (len(instancesToTerminate)))
-        print("EC2 instances list that are concerned for terminate: %s" % (instancesToTerminate))
-        print("Number of EC2 instances that are concerned for stop: %s " % (len(instancesTaggedForNbhStop)))
-        print("EC2 instances list that are concerned for stop: %s" % (instancesTaggedForNbhStop))
-
+        asgNameListToStart = retreiveTaggedAsgList(session, tag_key = 'WorkingHoursState', tag_value = 'running')
+        asgNameListToStop = retreiveTaggedAsgList(session, tag_key = 'NonWorkingHoursState', tag_value = 'stopped')
+        instanceIdListToStart = retrieveTaggedInstancesList(session, tag_key = 'WorkingHoursState', tag_value = 'running')
+        instanceIdListToStop = retrieveTaggedInstancesList(session, tag_key = 'NonWorkingHoursState', tag_value = 'stopped')
+        print("%s autoscaling groups concerned by NonWorkingHours stop : %s" % (len(asgNameListToStop), asgNameListToStop))
+        print("%s autoscaling groups concerned by WorkingHours start : %s" % (len(asgNameListToStart), asgNameListToStart))
+        print("%s EC2 instances concerned for NonWorkingHours stop : %s" % (len(instanceIdListToStop), instanceIdListToStop))
+        print("%s EC2 instances concerned for WorkingHours start : %s" % (len(instanceIdListToStart), instanceIdListToStart))
     return {
         'Return status' : returnCode
     }
@@ -96,8 +94,8 @@ def get_session(role=None, account=None, region=None, session_name='my_session')
 def suspendAsgList(session, asgNameList):
 
     processesList=['Launch']
-    asgclient = session.client('autoscaling')
     returnValue=True
+    asgclient = session.client('autoscaling')
 
     for asgName in asgNameList:
         if isExistsAsg(session, asgName):
@@ -111,12 +109,11 @@ def suspendAsgList(session, asgNameList):
 
     return returnValue
 
-
 def resumeAsgList(session, asgNameList):
 
     processesList=['Launch']
-    asgclient = session.client('autoscaling')
     returnValue=True
+    asgclient = session.client('autoscaling')
 
     for asgName in asgNameList:
         if isExistsAsg(session, asgName):
@@ -130,7 +127,7 @@ def resumeAsgList(session, asgNameList):
 
     return returnValue
 
-def retreiveAsgList(session, tag_key = 'NonBusinessHoursState', tag_value = 'terminated'):
+def retreiveTaggedAsgList(session, tag_key = 'none', tag_value = 'none'):
 
     client = session.client('autoscaling')
     paginator = client.get_paginator('describe_auto_scaling_groups')
@@ -166,16 +163,14 @@ def retreiveInstancesToTerminateList(session, asgNameList):
 
     return instance_ids
 
-def retrieveInstancesTaggedToStopList(session, tag_key = 'NonBusinessHoursState', tag_value = 'stopped'):
+def retrieveTaggedInstancesList(session, tag_key = 'none', tag_value = 'none'):
 
     ec2resource = session.resource('ec2')
-
-    StoppedTaggedInstances = []
+    instanceIds = []
     filters = [{'Name': 'tag:'+tag_key, 'Values': [tag_value]}]
     for instance in ec2resource.instances.filter(Filters=filters):
-        StoppedTaggedInstances.append(instance.id)
-
-    return StoppedTaggedInstances
+        instanceIds.append(instance.id)
+    return instanceIds
 
 def retrieveAllStandaloneInstances(session):
 

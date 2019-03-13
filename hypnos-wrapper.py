@@ -1,29 +1,38 @@
 import boto3
 import json
 import os
+from datetime import datetime, date, time, timedelta
 
 def lambda_handler(event, context):
 
     print("Event received : " + json.dumps(event, indent=2))
     
-    action=event['action']
-    print("Action : %s" % (action))
-    if action not in ["stop", "start", "list"]:
-        raise Exception('No valid action defined !')
-
+    if event['mode']:
+        mode = event['mode']
+        if mode in ["dryrun"]:
+            print("Mode : %s" % (mode))
+    else:
+        print("No mode detected")
+        
     ROLE = os.environ['ROLE_TO_ASSUME']
-    print("ROLE : %s" % (ROLE))
+    if ROLE:
+        print("ROLE : %s" % (ROLE))
+    else:
+        raise Exception('ROLE not found !')
     
     LAMBDA_TO_CALL = os.environ['LAMBDA_TO_CALL']
-    print("LAMBDA_TO_CALL : %s" % (LAMBDA_TO_CALL))
+    if LAMBDA_TO_CALL:
+        print("LAMBDA_TO_CALL : %s" % (LAMBDA_TO_CALL))
+    else:
+        raise Exception('LAMBDA_TO_CALL not found !')
+        
+    ACCOUNTSCONFIG_TABLE = os.environ['ACCOUNTSCONFIG_TABLE']
+    if ACCOUNTSCONFIG_TABLE:
+        print("ACCOUNTSCONFIG_TABLE : %s" % (ACCOUNTSCONFIG_TABLE))
+    else:
+        raise Exception('ACCOUNTSCONFIG_TABLE not found !')
     
-    CONFIGFILE_BUCKET = os.environ['CONFIGFILE_BUCKET']
-    print("CONFIGFILE_BUCKET : %s" % (CONFIGFILE_BUCKET))
-    
-    CONFIGFILE_NAME = os.environ['CONFIGFILE_NAME']
-    print("CONFIGFILE_NAME : %s" % (CONFIGFILE_NAME))
-
-    accountList = getAccountsList(CONFIGFILE_BUCKET, CONFIGFILE_NAME)
+    accountList = getAccountsList(ACCOUNTSCONFIG_TABLE)
     if type(accountList) == list:
         print("Accounts list : %s" % (accountList))
     else:
@@ -36,18 +45,102 @@ def lambda_handler(event, context):
         raise Exception('No valid list of accounts !')
 
     client = boto3.client('lambda')
+    
     for account in accountList:
-        for region in regions:
-            print ("Launching action %s on %s account for %s with role %s" % (action, account, region, ROLE))
-            response = client.invoke(
-                FunctionName=LAMBDA_TO_CALL,
-                InvocationType='Event',
-                Payload=json.dumps({'action': action,
-                                    'account': account,
-                                    'region': region,
-                                    'role': ROLE,
-                                    'mode': 'tagged'})
-            )
+        accountId = account["accountId"]
+        beginWorkingHoursUtc = account["beginWorkingHoursUtc"]
+        activeBeginWorkingHours = account["activeBeginWorkingHours"]
+        endWorkingHoursUtc = account["endWorkingHoursUtc"]
+        activeEndWorkingHours = account["activeEndWorkingHours"]
+        
+        begin=datetime.strptime(beginWorkingHoursUtc,'%H:%M')
+        end=datetime.strptime(endWorkingHoursUtc,'%H:%M')
+        now_string=datetime.now().strftime('%H:%M')
+        now=datetime.strptime(now_string,'%H:%M')
+        delta=timedelta(minutes=5)
+        
+        # determine the action to have depending on the incoming parameters
+        print("Determining action for accountId %s for now at %s with begin %s and end %s (UTC hours)" % (accountId, now.strftime('%H:%M'), begin.strftime('%H:%M'), end.strftime('%H:%M')))
+        action="none"
+        if begin<end:
+            print("UTC Begin hour is before the End hour.")
+            if now>=begin and now<end:
+                print("Working hours.")
+                if isInLaunchingPeriod(begin, now, delta):
+                    if activeBeginWorkingHours:
+                        print("Start on working-hours enabled => launch start action")
+                        action="start"
+                    else:
+                        print("Start on working-hours disabled => no start action")
+                        action="none"
+            else:
+                print("Non Working hours.")
+                if isInLaunchingPeriod(end, now, delta):
+                    if activeEndWorkingHours:
+                        print("Stop on Working-hours enabled => launch stop action")
+                        action="stop"
+                    else:
+                        print("Stop on working-hours disabled => no stop action")
+                        action="none"
+        else:
+            print("UTC Begin hour is after the End hour.")
+            if now>end and now<begin:
+                print("Non Working hours.")
+                if isInLaunchingPeriod(end, now, delta):
+                    if activeEndWorkingHours:
+                        print("Stop on working-hours enabled => launch stop action")
+                        action="stop"
+                    else:
+                        print("Stop on working-hours disabled => no stop action")
+                        action="none"
+            else:
+                print("Working hours.")
+                if isInLaunchingPeriod(begin, now, delta):
+                    if activeBeginWorkingHours:
+                        print("Start on working-hours enabled => launch start action")
+                        action="start"
+                    else:
+                        print("Start on working-hours disabled => no start action")
+                        action="none"
+        
+        if mode != "dryrun":
+            if action != "none":
+                launchLambdaForAllRegions(client, LAMBDA_TO_CALL, accountId, regions, ROLE, action)
+            else:
+                print("No action decided for %s" % (accountId))
+        else:
+            launchLambdaForAllRegions(client, LAMBDA_TO_CALL, accountId, regions, ROLE, "list")
+        
+    return {
+        'accountList': accountList,
+    }
+    
+def launchLambdaForAllRegions(client, lambdaName, account, regions, role, action = "none"):
+    for region in regions:
+        print ("Launching action %s on %s account for %s region with role %s" % (action, account, region, role))
+        launchLambda(client, lambdaName, account, region, role, action)
+
+def launchLambda(client, lambdaName, account, region, role, action = "none"):
+    if action != "none":
+        response = client.invoke(
+            FunctionName=lambdaName,
+            InvocationType='Event',
+            Payload=json.dumps({'action': action,
+                                'account': account,
+                                'region': region,
+                                'role': role
+            })
+        )
+    else:
+        print("No action defined")
+
+def isInLaunchingPeriod(period_begin, now, delta):
+  if now>=period_begin and now<period_begin+delta:
+      print("Launching period detected.")
+      return True
+  else:
+      print("Out of launching period.")
+      return False
 
 def getAllAwsRegionsNames():
 
@@ -55,19 +148,16 @@ def getAllAwsRegionsNames():
     regionNames = [region['RegionName'] for region in client.describe_regions()['Regions']]
     return regionNames
 
-def getAccountsList(configFileBucket, configFileName):
+def getAccountsList(AccountsConfigTable):
 
-    tempFile = '/tmp/accounts.list'
-    accountList=[]
+    client = boto3.resource('dynamodb')
+    table = client.Table(AccountsConfigTable)
+    response = table.scan()
+    accounts = response['Items']
 
-    s3client = boto3.client('s3')
-    s3client.download_file(configFileBucket, configFileName, tempFile)
-    #print(open(tempFile).read())
-    
-    # extract account from the file and avoid comments
-    for line in open(tempFile):
-      li=line.strip()
-      if not li.startswith("#"):
-        accountList.append(line.rstrip())
-    return accountList
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        accounts.extend(response['Items'])
+        
+    return accounts
 

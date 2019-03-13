@@ -7,21 +7,12 @@ Metadata:
     ParameterGroups:
       - Label:
           default: 'Lambda settings'
-        Parameters: ['LambdaS3Bucket', 'LambdaSourcesS3Prefix', 'LambdaConfigS3File']
+        Parameters: ['LambdaS3Bucket', 'LambdaSourcesS3Prefix']
       - Label:
-          default: 'Cloudwatch event rules'
-        Parameters: ['CronBeginBusinessHours', 'CronEndBusinessHours']
+          default: 'Hypnos launch frequency'
+        Parameters: ['CronTriggerLambda']
 
 Parameters:
-
-  Environment:
-    Description: Environment where Hypnos is installed
-    Type: String
-    Default: prod
-    AllowedValues:
-    - dev
-    - staging
-    - prod
 
   ChildAccountRole:
     Description: Child AWS account ID
@@ -33,34 +24,48 @@ Parameters:
     Description: Tag application
     Type: String
     Default: hypnos
-  TagComp:
-    Description: Tag composants
+
+  TagBlock:
+    Description: Tag Block
     Type: String
-    Default: application
+    Default: sharedservices
 
   LambdaS3Bucket:
     Description: Application Bucket
     Type: String
+
   LambdaSourcesS3Prefix:
     Description: Application Prefix
     Type: String
     Default: sources
-  LambdaConfigS3File:
-    Description: location of the configuration file
-    Type: String
-    Default: config/accounts.list
 
-  CronBeginBusinessHours:
+  CronTriggerLambda:
     Description: Hour to wake up infrastructure
     Type: String
-    Default: "cron(0 6 ? * MON-FRI *)"
-  CronEndBusinessHours:
-    Description: Hour to stop infrastructure
-    Type: String
-    Default: "cron(0 21 ? * MON-FRI *)"
-
+    Default: "cron(0 * ? * MON-FRI *)"
 
 Resources:
+
+  HypnosAccountsConfigTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: hypnos-accounts-config
+      AttributeDefinitions:
+      - AttributeName: 'accountId'
+        AttributeType: 'S'
+      KeySchema:
+      - AttributeName: 'accountId'
+        KeyType: 'HASH'
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      SSESpecification:
+        SSEEnabled: true
+      Tags: 
+      - Key: Block
+        Value: !Ref TagBlock
+      - Key: App
+        Value: !Ref TagApp
 
   HypnosCentralLambdaRole:
     Type: AWS::IAM::Role
@@ -107,17 +112,15 @@ Resources:
         S3Bucket: !Sub '${LambdaS3Bucket}'
         S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-central.py.zip'
       Description: "Manage instance during non business hours"
-      FunctionName: !Sub '${TagApp}-central-${Environment}'
+      FunctionName: !Sub '${TagApp}-central'
       Handler: "hypnos-central.lambda_handler"
       MemorySize: 128
       Role: !Sub ${HypnosCentralLambdaRole.Arn}
       Runtime: "python3.6"
       Timeout: 60
       Tags:
-      - Key: Env
-        Value: !Ref Environment
-      - Key: Comp
-        Value: !Ref TagComp
+      - Key: Block
+        Value: !Ref TagBlock
       - Key: App
         Value: !Ref TagApp
 
@@ -152,14 +155,14 @@ Resources:
             - logs:CreateLogStream
             Resource:
             - "arn:aws:logs:*:*:*"
-      - PolicyName: get-s3-file-config-allow
+      - PolicyName: scan-dynamo-accounts-config-allow
         PolicyDocument:
           Statement:
           - Effect: "Allow"
             Action:
-            - "s3:GetObject"
+            - "dynamodb:scan"
             Resource:
-            - !Sub "arn:aws:s3:::${LambdaS3Bucket}/${LambdaConfigS3File}"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HypnosAccountsConfigTable}"
       - PolicyName: describe-regions-allow
         PolicyDocument:
           Statement:
@@ -182,7 +185,7 @@ Resources:
         S3Bucket: !Sub '${LambdaS3Bucket}'
         S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-wrapper.py.zip'
       Description: "Launch all the child Lambda by account"
-      FunctionName: !Sub '${TagApp}-wrapper-${Environment}'
+      FunctionName: !Sub '${TagApp}-wrapper'
       Handler: "hypnos-wrapper.lambda_handler"
       MemorySize: 128
       Role: !Sub ${HypnosWrapperLambdaRole.Arn}
@@ -191,54 +194,31 @@ Resources:
       Environment:
         Variables:
           LAMBDA_TO_CALL: !Sub '${HypnosCentralLambda}'
-          ROLE_TO_ASSUME: "hypnos-manage-instances"
-          CONFIGFILE_BUCKET: !Sub '${LambdaS3Bucket}'
-          CONFIGFILE_NAME: !Sub '${LambdaConfigS3File}'
+          ROLE_TO_ASSUME: !Sub '${ChildAccountRole}'
+          ACCOUNTSCONFIG_TABLE: !Ref HypnosAccountsConfigTable
       Tags:
-      - Key: Env
-        Value: !Ref Environment
-      - Key: Comp
-        Value: !Ref TagComp
+      - Key: Block
+        Value: !Ref TagBlock
       - Key: App
         Value: !Ref TagApp
 
-  EndOfBusinessHoursEventRule:
+  TriggerWrapperLambdaEventRule:
     Type: "AWS::Events::Rule"
-    Properties: 
-      Description: "Start of non-business hours actions"
-      Name: !Sub '${TagApp}-start-nonbusinesshours-${Environment}'
-      ScheduleExpression: !Ref CronEndBusinessHours
+    Properties:
+      Description: "Periodicaly invokes lambda wrapper for Hypnos"
+      Name: !Sub '${TagApp}-invoke-lambda'
+      ScheduleExpression: !Ref CronTriggerLambda
       State: "ENABLED"
       Targets:
       - Arn: !Sub ${HypnosWrapperLambda.Arn}
-        Id: EndOfBusinessHoursEventRule
-        Input : '{ "action": "stop" }'
+        Id: TriggerWrapperLambdaEventRule
+        Input : '{ "mode": "run" }'
 
-  PermissionForEndBusinessHoursToInvokeLambda:
+  PermissionTriggerWrapperLambdaEventRuleToInvokeLambda:
     Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !Ref HypnosWrapperLambda
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !Sub ${EndOfBusinessHoursEventRule.Arn}
-
-  BeginOfBusinessHoursEventRule:
-    Type: "AWS::Events::Rule"
-    Properties:
-      Description: "End of non-business hours actions"
-      Name: !Sub '${TagApp}-end-nonbusinesshours-${Environment}'
-      ScheduleExpression: !Ref CronBeginBusinessHours
-      State: "ENABLED"
-      Targets:
-      - Arn: !Sub ${HypnosWrapperLambda.Arn}
-        Id: BeginOfBusinessHoursEventRule
-        Input : '{ "action": "start" }'
-
-  PermissionForBeginBusinessHoursToInvokeLambda:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      FunctionName: !Ref HypnosWrapperLambda
-      Action: "lambda:InvokeFunction"
-      Principal: "events.amazonaws.com"
-      SourceArn: !Sub ${BeginOfBusinessHoursEventRule.Arn}
+      SourceArn: !Sub ${TriggerWrapperLambdaEventRule.Arn}
 
