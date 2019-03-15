@@ -57,7 +57,7 @@ def lambda_handler(event, context):
         end=datetime.strptime(endWorkingHoursUtc,'%H:%M')
         now_string=datetime.now().strftime('%H:%M')
         now=datetime.strptime(now_string,'%H:%M')
-        delta=timedelta(minutes=5)
+        delta=timedelta(minutes=15)
         
         # determine the action to have depending on the incoming parameters
         print("Determining action for accountId %s for now at %s with begin %s and end %s (UTC hours)" % (accountId, now.strftime('%H:%M'), begin.strftime('%H:%M'), end.strftime('%H:%M')))

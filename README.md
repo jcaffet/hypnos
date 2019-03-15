@@ -9,16 +9,14 @@ AWS Hypnos is capable to stop AWS resources during non-business hours for costs 
 More precisely, at evening :
 - suspends auto-scaling groups activity and terminates the instances
 - stops standalone EC2 instances
+- stops Aurora RDS clusters
 
 In the morning of business day :
 - resumes the auto-scaling groups activity, which triggers the new instances creation
 - starts standalone EC2 instances 
+- starts Aurora RDS clusters
 
-Hypnos handles all the regions of the target accounts. It works for multiple accounts : just add them in the file stored in S3.
-
-It is also capable of two modes :
-- all : handles of ressources of the account
-- taggued : only looks for tagged ressources and avoid the other ones 
+Hypnos works for a list of AWS accounts and will handle all the regions of the account.
 
 ## Content
 
@@ -51,7 +49,6 @@ The information per item in the DynamoDB table must be :
 The Lambda needs one parameter :
 - mode : use "run" to perforn actions or "dryrun" to just list actions and concerned ressources.
 
-
 ### Central Lambda
 
 The business lambda assumes a role on the external child account and performs the stop activity.
@@ -63,11 +60,13 @@ The Lambda needs three parameters :
 
 For a stop action, Hypnos Lambda :
 - looks for tagged autoscaling groups, suspends them and terminates all the attached instances
-- looks for tagged EC2 instances and stops them
+- looks for tagged EC2 instances in "running" status and stops them
+- looks for tagged Aurora RDS clusters in "Available" status and them
 
 For a start action, Hypnos Lambda :
 - looks for concerned autoscaling groups and resumes them. Then, the ASG is launching instances corresponding to the Desired capacity setting
-- looks for tagged EC2 instances and starts them
+- looks for tagged EC2 instances in "stopped" status and starts them
+- looks for tagged Aurora RDS clusters in "stopped" status and them
 
 For a list action, Hypnos Lambda :
 - only displays concerned ressources without any action (dryrun mode)
@@ -81,11 +80,11 @@ In the child account point of view, there is no business logic to develop. The o
 
 The NonWorkingHoursState tag values could be :
 - running : keep instances running during non-business hours
-- stopped : for auto-scaling groups, terminates the attached instances, for standalone instances, stop them during non-business hours
+- stopped : for auto-scaling groups, terminates the attached instances, for standalone instances or Aurora clusters, stop them during non-business hours
 
 The WorkingHoursState tag values could be :
 - running : start instances at the beginning of business hours
-- stopped : for auto-scaling groups and standalone instances keep them stopped at the beginning of business hours
+- stopped : for auto-scaling groups, standalone instances and Aurora clusters keep them stopped at the beginning of business hours
 
 It is a good pratice to define different behaviours depending on the environment. With Cloudformation, use mappings :
 
@@ -110,5 +109,4 @@ And retreive the value later for the tag value :
 
 ## Limitations
 
-- only supports up to 100 autoscaling groups per account
-
+- the Boto version implemented in Lambda is actually not supporting some start/stop RDS methods and triggers issues like "'RDS' object has no attribute 'stop_db_cluster': AttributeError" is that case, you will have to add the latest Boto layer in the Lambda package (https://docs.aws.amazon.com/lambda/latest/dg/lambda-python-how-to-create-deployment-package.html)

@@ -37,6 +37,10 @@ Resources:
             - autoscaling:DescribeAutoScalingGroups
             - autoscaling:SuspendProcesses
             - autoscaling:TerminateInstanceInAutoScalingGroup
+            - rds:DescribeDBClusters
+            - rds:ListTagsForResource
+            - rds:StartDBCluster
+            - rds:StopDBCluster
             Resource:
             - '*'
 
