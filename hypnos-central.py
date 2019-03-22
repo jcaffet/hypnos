@@ -247,21 +247,21 @@ def stopRdsClusters(session, rdsClusters):
     client = session.client('rds')
     for rdsCluster in rdsClusters:
         # it is not accepted to stop a cluster in a Status not Available
-        if rdsCluster['Status'] == "Available":
+        if rdsCluster['Status'] == "available":
             print("Stopping %s RDS cluster" % (rdsCluster['DBClusterIdentifier']))
             response = client.stop_db_cluster(DBClusterIdentifier=rdsCluster['DBClusterIdentifier'])
         else:
-            print("%s RDS cluster not in Available status => no stop action" % (rdsCluster['DBClusterIdentifier']))
+            print("%s RDS cluster is in %s status => no stop action" % (rdsCluster['DBClusterIdentifier'], rdsCluster['Status']))
 
 def startRdsClusters(session, rdsClusters):
     client = session.client('rds')
     for rdsCluster in rdsClusters:
         # it is not accepted to start a cluster in a Status not Stopped
-        if rdsCluster['Status'] == "Stopped":
+        if rdsCluster['Status'] == "stopped":
             print("Starting %s RDS cluster" % (rdsCluster['DBClusterIdentifier']))
             response = client.start_db_cluster(DBClusterIdentifier=rdsCluster['DBClusterIdentifier'])
         else:
-            print("%s RDS cluster not in Stopped status => no start action" % (rdsCluster['DBClusterIdentifier']))
+            print("%s RDS cluster is in %s status => no start action" % (rdsCluster['DBClusterIdentifier'], rdsCluster['Status']))
 
 def filterRdsClustersByStatus(rdsClusters, Status="none"):
     filteredRdsCluster=[]
