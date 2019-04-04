@@ -1,6 +1,6 @@
 # AWS Hypnos
 
-Hypnos takes care of your security and costs by turning down AWS ressources during non-business hours.
+Hypnos takes care of your security and costs by turning down AWS ressources during non-business hours and start them at the beginning of working hours.
 
 ## Description
 
@@ -47,7 +47,7 @@ The information per item in the DynamoDB table must be :
 - endWorkingHoursUtc (S)
 
 The Lambda needs one parameter :
-- mode : use "run" to perforn actions or "dryrun" to just list actions and concerned ressources.
+- mode : use "run" to perforn actions or "dryrun" to just list actions and concerned resources.
 
 ### Central Lambda
 
@@ -86,7 +86,7 @@ The WorkingHoursState tag values could be :
 - running : start instances at the beginning of business hours
 - stopped : for auto-scaling groups, standalone instances and Aurora clusters keep them stopped at the beginning of business hours
 
-It is a good pratice to define different behaviours depending on the environment. With Cloudformation, use mappings :
+It is a good practice to define different behaviors depending on the environment. With Cloudformation, use mappings :
 
 ```
 Mappings:
@@ -99,7 +99,7 @@ Mappings:
       TagNonWorkingHoursState: 'running'
 ```
 
-And retreive the value later for the tag value :
+And retrieve the value later for the tag value :
 
 ```
 - Key: NonWorkingHoursState
