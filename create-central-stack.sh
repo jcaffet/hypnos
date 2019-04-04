@@ -3,10 +3,12 @@
 usage(){
     echo "Usage: $0 <profile>" 
     echo "profile : aws profile to use for deployment" 
+    echo "bucket  : S3 bucket name (with s3://) to use" 
 }
 
-if [ $# -eq 1 ]; then
+if [ $# -eq 2 ]; then
    profile=$1
+   HYPNOS_BUCKET=hypnos-460863991257
 else
    usage;
    exit 1;
@@ -17,7 +19,6 @@ zip hypnos-wrapper.py.zip hypnos-wrapper.py
 zip hypnos-central.py.zip hypnos-central.py
 
 echo "Copying sources"
-HYPNOS_BUCKET=hypnos-460863991257
 aws --profile=${profile} s3 cp . s3://${HYPNOS_BUCKET}/sources/ --recursive --exclude "*" --include "hypnos-*.py.zip"
 
 echo "Creating stack"
