@@ -3,12 +3,12 @@
 usage(){
     echo "Usage: $0 <profile>" 
     echo "profile : aws profile to use for deployment" 
-    echo "bucket  : S3 bucket name (with s3://) to use" 
+    echo "bucket  : S3 bucket name (without s3://) to use" 
 }
 
 if [ $# -eq 2 ]; then
    profile=$1
-   HYPNOS_BUCKET=hypnos-460863991257
+   HYPNOS_BUCKET=$2
 else
    usage;
    exit 1;
