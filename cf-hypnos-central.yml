@@ -15,10 +15,9 @@ Metadata:
 Parameters:
 
   ChildAccountRole:
-    Description: Child AWS account ID
+    Description: Hypnos role name in spoke accounts
     Type: String
     Default: hypnos-manage-instances
-    ConstraintDescription: Must be a valid AWS account ID
 
   TagApp:
     Description: Tag application
@@ -61,7 +60,7 @@ Resources:
         WriteCapacityUnits: 1
       SSESpecification:
         SSEEnabled: true
-      Tags: 
+      Tags:
       - Key: Block
         Value: !Ref TagBlock
       - Key: App
@@ -101,13 +100,13 @@ Resources:
 
   HypnosCentralLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
-    Properties: 
+    Properties:
       LogGroupName: !Sub '/aws/lambda/${HypnosCentralLambda}'
       RetentionInDays: 30
 
   HypnosCentralLambda:
     Type: "AWS::Lambda::Function"
-    Properties: 
+    Properties:
       Code:
         S3Bucket: !Sub '${LambdaS3Bucket}'
         S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-central.py.zip'
@@ -221,4 +220,3 @@ Resources:
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: !Sub ${TriggerWrapperLambdaEventRule.Arn}
-
