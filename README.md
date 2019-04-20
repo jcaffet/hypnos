@@ -1,6 +1,6 @@
 # AWS Hypnos
 
-Hypnos takes care of your security and costs by turning down AWS ressources during non-business hours and start them at the beginning of working hours.
+Hypnos takes care of your security and costs by turning down AWS resources during non-business hours and start them at the beginning of working hours.
 
 ## Description
 
@@ -13,7 +13,7 @@ More precisely, at evening :
 
 In the morning of business day :
 - resumes the auto-scaling groups activity, which triggers the new instances creation
-- starts standalone EC2 instances 
+- starts standalone EC2 instances
 - starts Aurora RDS clusters
 
 Hypnos works for a list of AWS accounts and will handle all the regions of the account.
@@ -31,7 +31,7 @@ There is :
 
 ### Cloudwatch Rule
 
-The Cloudwatch rule periodicaly triggers the wrapper lambda depending on the configuration in the Cloudformation :
+The Cloudwatch rule periodically triggers the wrapper lambda depending on the configuration in the Cloudformation :
 - at the end of business hours,
 - at the beginning of business hours
 
@@ -73,8 +73,8 @@ For a list action, Hypnos Lambda :
 
 ## How to use Hypnos for child account users
 
-In the child account point of view, there is no business logic to develop. The only thing to do is to 
-- add the appropriate tags to the concerned ressouces : WorkingHoursState and NonWorkingHoursState 
+In the child account point of view, there is no business logic to develop. The only thing to do is to
+- add the appropriate tags to the concerned resources : WorkingHoursState and NonWorkingHoursState
 - deploy the child role stack (if not already deployed as a StackSet)
 - specify the account in the DynamoDb table with begin and end hours and if action should happen at that times.
 
