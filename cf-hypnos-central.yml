@@ -115,7 +115,7 @@ Resources:
       Handler: "hypnos-central.lambda_handler"
       MemorySize: 128
       Role: !Sub ${HypnosCentralLambdaRole.Arn}
-      Runtime: "python3.6"
+      Runtime: "python3.7"
       Timeout: 60
       Tags:
       - Key: Block
@@ -188,7 +188,7 @@ Resources:
       Handler: "hypnos-wrapper.lambda_handler"
       MemorySize: 128
       Role: !Sub ${HypnosWrapperLambdaRole.Arn}
-      Runtime: "python3.6"
+      Runtime: "python3.7"
       Timeout: 60
       Environment:
         Variables:
