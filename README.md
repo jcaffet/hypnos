@@ -31,13 +31,13 @@ There is :
 
 ### Cloudwatch Rule
 
-The Cloudwatch rule periodically triggers the wrapper lambda depending on the configuration in the Cloudformation :
+The CloudWatch rule periodically triggers the wrapper lambda depending on the configuration in the CloudFormation :
 - at the end of business hours,
 - at the beginning of business hours
 
 ### Wrapper Lambda
 
-There is one wrapper Lambda in the central account triggered by Cloudwatch Event rules. It collects accounts information in a Dynamo table to perform and asynchronously invokes lambda for each target account and each regions.
+There is one wrapper Lambda in the central account triggered by CloudWatch Event rules. It collects accounts information in a Dynamo table to perform and asynchronously invokes lambda for each target account and each regions.
 
 The information per item in the DynamoDB table must be :
 - accountId (S)
@@ -47,7 +47,7 @@ The information per item in the DynamoDB table must be :
 - endWorkingHoursUtc (S)
 
 The Lambda needs one parameter :
-- mode : use "run" to perforn actions or "dryrun" to just list actions and concerned resources.
+- mode : use "run" to perform actions or "dryrun" to just list actions and concerned resources.
 
 ### Central Lambda
 
@@ -69,14 +69,14 @@ For a start action, Hypnos Lambda :
 - looks for tagged Aurora RDS clusters in "stopped" status and them
 
 For a list action, Hypnos Lambda :
-- only displays concerned ressources without any action (dryrun mode)
+- only displays concerned resources without any action (dryrun mode)
 
 ## How to use Hypnos for child account users
 
 In the child account point of view, there is no business logic to develop. The only thing to do is to
 - add the appropriate tags to the concerned resources : WorkingHoursState and NonWorkingHoursState
 - deploy the child role stack (if not already deployed as a StackSet)
-- specify the account in the DynamoDb table with begin and end hours and if action should happen at that times.
+- specify the account in the DynamoDB table with begin and end hours and if action should happen at that times.
 
 The NonWorkingHoursState tag values could be :
 - running : keep instances running during non-business hours
@@ -86,7 +86,7 @@ The WorkingHoursState tag values could be :
 - running : start instances at the beginning of business hours
 - stopped : for auto-scaling groups, standalone instances and Aurora clusters keep them stopped at the beginning of business hours
 
-It is a good practice to define different behaviors depending on the environment. With Cloudformation, use mappings :
+It is a good practice to define different behaviors depending on the environment. With CloudFormation, use mappings :
 
 ```
 Mappings:
@@ -106,7 +106,3 @@ And retrieve the value later for the tag value :
   Value: !FindInMap [EnvironmentMap, !Ref Environment, TagNonWorkingHoursState]
   PropagateAtLaunch: 'true'
 ```
-
-## Limitations
-
-- the Boto version implemented in Lambda is actually not supporting some start/stop RDS methods and triggers issues like "'RDS' object has no attribute 'stop_db_cluster': AttributeError" is that case, you will have to add the latest Boto layer in the Lambda package (https://docs.aws.amazon.com/lambda/latest/dg/lambda-python-how-to-create-deployment-package.html)
