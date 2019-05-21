@@ -31,13 +31,13 @@ There is :
 
 ### Cloudwatch Rule
 
-The CloudWatch rule periodically triggers the wrapper lambda depending on the configuration in the CloudFormation :
+The CloudWatch rule periodically triggers the launcher lambda depending on the configuration in the CloudFormation :
 - at the end of business hours,
 - at the beginning of business hours
 
-### Wrapper Lambda
+### Launcher Lambda
 
-There is one wrapper Lambda in the central account triggered by CloudWatch Event rules. It collects accounts information in a Dynamo table to perform and asynchronously invokes lambda for each target account and each regions.
+There is one launcher Lambda in the central account triggered by CloudWatch Event rules. It collects accounts information in a Dynamo table to perform and asynchronously invokes lambda for each target account and each regions.
 
 The information per item in the DynamoDB table must be :
 - accountId (S)

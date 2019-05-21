@@ -29,6 +29,11 @@ Parameters:
     Type: String
     Default: sharedservices
 
+  TagOrg:
+    Description: Organization tag
+    Type: String
+    Default: cloudteam
+
   LambdaS3Bucket:
     Description: Application Bucket
     Type: String
@@ -65,6 +70,8 @@ Resources:
         Value: !Ref TagBlock
       - Key: App
         Value: !Ref TagApp
+      - Key: Org
+        Value: !Ref TagOrg
 
   HypnosCentralLambdaRole:
     Type: AWS::IAM::Role
@@ -122,11 +129,13 @@ Resources:
         Value: !Ref TagBlock
       - Key: App
         Value: !Ref TagApp
+      - Key: Org
+        Value: !Ref TagOrg
 
-  HypnosWrapperLambdaRole:
+  HypnosLauncherLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: hypnos-wrapper-lambda-role
+      RoleName: hypnos-launcher-lambda-role
       AssumeRolePolicyDocument:
         Statement:
         - Effect: Allow
@@ -143,7 +152,7 @@ Resources:
             Action:
             - lambda:InvokeFunction
             Resource:
-            - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${HypnosCentralLambda}"
+            - !GetAtt HypnosCentralLambda.Arn
       - PolicyName: write-cloudwatch-logs-allow
         PolicyDocument:
           Statement:
@@ -161,7 +170,7 @@ Resources:
             Action:
             - "dynamodb:scan"
             Resource:
-            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${HypnosAccountsConfigTable}"
+            - !GetAtt HypnosAccountsConfigTable.Arn
       - PolicyName: describe-regions-allow
         PolicyDocument:
           Statement:
@@ -171,23 +180,23 @@ Resources:
             Resource:
             - "*"
 
-  HypnosWrapperLambdaLogGroup:
+  HypnosLauncherLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${HypnosWrapperLambda}'
+      LogGroupName: !Sub '/aws/lambda/${HypnosLauncherLambda}'
       RetentionInDays: 30
 
-  HypnosWrapperLambda:
+  HypnosLauncherLambda:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
         S3Bucket: !Sub '${LambdaS3Bucket}'
-        S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-wrapper.py.zip'
+        S3Key: !Sub '${LambdaSourcesS3Prefix}/hypnos-launcher.py.zip'
       Description: "Launch all the child Lambda by account"
-      FunctionName: !Sub '${TagApp}-wrapper'
-      Handler: "hypnos-wrapper.lambda_handler"
+      FunctionName: !Sub '${TagApp}-launcher'
+      Handler: "hypnos-launcher.lambda_handler"
       MemorySize: 128
-      Role: !Sub ${HypnosWrapperLambdaRole.Arn}
+      Role: !Sub ${HypnosLauncherLambdaRole.Arn}
       Runtime: "python3.7"
       Timeout: 60
       Environment:
@@ -200,23 +209,25 @@ Resources:
         Value: !Ref TagBlock
       - Key: App
         Value: !Ref TagApp
+      - Key: Org
+        Value: !Ref TagOrg
 
-  TriggerWrapperLambdaEventRule:
+  TriggerLauncherLambdaEventRule:
     Type: "AWS::Events::Rule"
     Properties:
-      Description: "Periodicaly invokes lambda wrapper for Hypnos"
+      Description: "Periodicaly invokes lambda launcher for Hypnos"
       Name: !Sub '${TagApp}-invoke-lambda'
       ScheduleExpression: !Ref CronTriggerLambda
       State: "ENABLED"
       Targets:
-      - Arn: !Sub ${HypnosWrapperLambda.Arn}
-        Id: TriggerWrapperLambdaEventRule
+      - Arn: !GetAtt HypnosLauncherLambda.Arn
+        Id: TriggerLauncherLambdaEventRule
         Input : '{ "mode": "run" }'
 
-  PermissionTriggerWrapperLambdaEventRuleToInvokeLambda:
+  PermissionTriggerLauncherLambdaEventRuleToInvokeLambda:
     Type: "AWS::Lambda::Permission"
     Properties:
-      FunctionName: !Ref HypnosWrapperLambda
+      FunctionName: !Ref HypnosLauncherLambda
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: !Sub ${TriggerWrapperLambdaEventRule.Arn}
+      SourceArn: !GetAtt TriggerLauncherLambdaEventRule.Arn
