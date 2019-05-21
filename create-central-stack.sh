@@ -15,7 +15,7 @@ else
 fi
 
 echo "Zipping sources"
-zip hypnos-wrapper.py.zip hypnos-wrapper.py
+zip hypnos-launcher.py.zip hypnos-launcher.py
 zip hypnos-central.py.zip hypnos-central.py
 
 echo "Copying sources"
@@ -27,4 +27,4 @@ aws --profile=${profile} cloudformation create-stack \
     --capabilities CAPABILITY_NAMED_IAM \
     --template-body file://cf-hypnos-central.yml \
     --parameters ParameterKey=LambdaS3Bucket,ParameterValue=${HYPNOS_BUCKET}
-
+rm hypnos-*.py.zip

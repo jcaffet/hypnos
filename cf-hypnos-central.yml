@@ -124,6 +124,9 @@ Resources:
       Role: !Sub ${HypnosCentralLambdaRole.Arn}
       Runtime: "python3.7"
       Timeout: 60
+      Environment:
+        Variables:
+          HYPNOS_MANAGE_ROLE: !Sub '${ChildAccountRole}'
       Tags:
       - Key: Block
         Value: !Ref TagBlock
@@ -201,8 +204,7 @@ Resources:
       Timeout: 60
       Environment:
         Variables:
-          LAMBDA_TO_CALL: !Sub '${HypnosCentralLambda}'
-          ROLE_TO_ASSUME: !Sub '${ChildAccountRole}'
+          LAMBDA_TO_CALL: !Ref HypnosCentralLambda
           ACCOUNTSCONFIG_TABLE: !Ref HypnosAccountsConfigTable
       Tags:
       - Key: Block
