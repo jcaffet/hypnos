@@ -5,22 +5,32 @@ import os
 
 def lambda_handler(event, context):
 
-    print("Received event : " + json.dumps(event, indent=2))
-    
-    role=event['role']
-    account=event['account']
-    region=event['region']
-    print("Role to assume : %s" % (role))
-    print("Account to use : %s" % (account))
-    print("Region : %s" % (region))
-    
-    action=event['action']
-    if action in ["stop", "start", "list"]:
-        print("Action : %s" % (action))
+    ROLE = os.environ['HYPNOS_MANAGE_ROLE']
+    if ROLE:
+        print("ROLE : %s" % (ROLE))
     else:
-        raise Exception('No valid action value defined !')
+        raise Exception('ROLE not found !')
 
-    session = get_session(role=role, account=account, region=region, session_name='hypnos_lambda')
+    if 'account' in event.keys():
+        account = event['account']
+    else:
+        raise Exception('account not found !')
+
+    if 'region' in event.keys():
+        region = event['region']
+    else:
+        raise Exception('region not found !')
+
+    if 'action' in event.keys():
+        if event['action'] in ["stop", "start", "list"]:
+            action = event['action']
+        else:
+            raise Exception('No valid action value defined !')
+    else:
+        raise Exception('action not found !')
+
+
+    session = get_session(role=ROLE, account=account, region=region, session_name='hypnos_lambda')
 
     returnCode=True
     if action == "start":
@@ -189,7 +199,7 @@ def retrieveTaggedInstancesList(session, tag_key = 'none', tag_value = 'none'):
 def retrieveAllStandaloneInstances(session):
 
     ec2resource = session.resource('ec2')
-    
+
     # get a list of all instances
     all_running_instances = [i for i in ec2resource.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])]
 
@@ -198,7 +208,7 @@ def retrieveAllStandaloneInstances(session):
 
     # filter from all instances_asg the instances that are not in the filtered list
     instances_id_to_stop = [running.id for running in all_running_instances if running.id not in [i.id for i in asg_instances]]
-        
+
     return instances_id_to_stop
 
 def stopInstances(session, ec2instanceIds):
