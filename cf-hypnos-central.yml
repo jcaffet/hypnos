@@ -11,13 +11,20 @@ Metadata:
       - Label:
           default: 'Hypnos launch frequency'
         Parameters: ['CronTriggerLambda']
+      - Label:
+          default: 'Access to the spoke accounts'
+        Parameters: ['HypnosManageRole', 'HypnosManageRoleExternalId']
 
 Parameters:
 
-  ChildAccountRole:
+  HypnosManageRole:
     Description: Hypnos role name in spoke accounts
     Type: String
     Default: hypnos-manage-instances
+
+  HypnosManageRoleExternalId:
+    Description: Hitman Role External ID
+    Type: String
 
   TagApp:
     Description: Tag application
@@ -103,7 +110,7 @@ Resources:
             Action:
             - "sts:AssumeRole"
             Resource:
-            - !Sub 'arn:aws:iam::*:role/${ChildAccountRole}'
+            - !Sub 'arn:aws:iam::*:role/${HypnosManageRole}'
 
   HypnosCentralLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -121,12 +128,13 @@ Resources:
       FunctionName: !Sub '${TagApp}-central'
       Handler: "hypnos-central.lambda_handler"
       MemorySize: 128
-      Role: !Sub ${HypnosCentralLambdaRole.Arn}
+      Role: !GetAtt HypnosCentralLambdaRole.Arn
       Runtime: "python3.7"
       Timeout: 60
       Environment:
         Variables:
-          HYPNOS_MANAGE_ROLE: !Sub '${ChildAccountRole}'
+          HYPNOS_MANAGE_ROLE: !Ref HypnosManageRole
+          HYPNOS_MANAGE_ROLE_EXTERNALID: !Ref HypnosManageRoleExternalId
       Tags:
       - Key: Block
         Value: !Ref TagBlock

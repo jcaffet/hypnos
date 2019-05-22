@@ -9,6 +9,10 @@ Parameters:
     Type: String
     ConstraintDescription: Must be a valid AWS account ID
 
+  HypnosManageRoleRoleExternalId:
+    Description: Hypnos Role External ID
+    Type: String
+
 Resources:
 
   HypnosManageInstancesRole:
@@ -22,6 +26,9 @@ Resources:
             AWS: !Sub 'arn:aws:iam::${CentralHypnosAccount}:root'
           Action:
           - sts:AssumeRole
+          Condition:
+            StringEquals:
+              "sts:ExternalId": !Sub '${HitmanNukeAssumeRoleExternalId}'
       Path: "/"
       Policies:
       - PolicyName: hypnos-start-stop-instances
@@ -43,4 +50,3 @@ Resources:
             - rds:StopDBCluster
             Resource:
             - '*'
-

@@ -5,11 +5,17 @@ import os
 
 def lambda_handler(event, context):
 
-    ROLE = os.environ['HYPNOS_MANAGE_ROLE']
-    if ROLE:
-        print("ROLE : %s" % (ROLE))
+    if 'HYPNOS_MANAGE_ROLE' in os.environ:
+        HYPNOS_MANAGE_ROLE = os.environ['HYPNOS_MANAGE_ROLE']
+        print("HYPNOS_MANAGE_ROLE : %s" % (HYPNOS_MANAGE_ROLE))
     else:
-        raise Exception('ROLE not found !')
+        raise Exception('HYPNOS_MANAGE_ROLE not found !')
+
+    if 'HYPNOS_MANAGE_ROLE_EXTERNALID' in os.environ:
+        HYPNOS_MANAGE_ROLE_EXTERNALID = os.environ['HYPNOS_MANAGE_ROLE_EXTERNALID']
+        print("HYPNOS_MANAGE_ROLE_EXTERNALID : %s" % (HYPNOS_MANAGE_ROLE_EXTERNALID))
+    else:
+        raise Exception('HYPNOS_MANAGE_ROLE_EXTERNALID not found !')
 
     if 'account' in event.keys():
         account = event['account']
@@ -30,7 +36,11 @@ def lambda_handler(event, context):
         raise Exception('action not found !')
 
 
-    session = get_session(role=ROLE, account=account, region=region, session_name='hypnos_lambda')
+    session = get_session(account=account,
+                          role=HYPNOS_MANAGE_ROLE,
+                          role_externalid=HYPNOS_MANAGE_ROLE_EXTERNALID,
+                          region=region,
+                          session_name='hypnos_lambda')
 
     returnCode=True
     if action == "start":
@@ -100,14 +110,15 @@ def lambda_handler(event, context):
         'Return status' : returnCode
     }
 
-def get_session(role=None, account=None, region=None, session_name='my_session'):
-
+def get_session(account=None, role=None, role_externalid=None, region=None, session_name='my_session'):
     # If the role is given : assumes a role and returns boto3 session
     # otherwise : returns a regular session with the current IAM user/role
     if role:
         client = boto3.client('sts')
         role_arn = 'arn:aws:iam::' + account + ':role/' + role
-        response = client.assume_role(RoleArn=role_arn, RoleSessionName=session_name)
+        response = client.assume_role(RoleArn=role_arn,
+                                      ExternalId=role_externalid,
+                                      RoleSessionName=session_name)
         session = boto3.Session(
             aws_access_key_id=response['Credentials']['AccessKeyId'],
             aws_secret_access_key=response['Credentials']['SecretAccessKey'],
@@ -118,7 +129,6 @@ def get_session(role=None, account=None, region=None, session_name='my_session')
         return boto3.Session()
 
 def suspendAsgList(session, asgNameList):
-
     processesList=['Launch']
     returnValue=True
     asgclient = session.client('autoscaling')
@@ -136,7 +146,6 @@ def suspendAsgList(session, asgNameList):
     return returnValue
 
 def resumeAsgList(session, asgNameList):
-
     processesList=['Launch']
     returnValue=True
     asgclient = session.client('autoscaling')
@@ -154,7 +163,6 @@ def resumeAsgList(session, asgNameList):
     return returnValue
 
 def retreiveTaggedAsgList(session, tag_key = 'none', tag_value = 'none'):
-
     client = session.client('autoscaling')
     paginator = client.get_paginator('describe_auto_scaling_groups')
     page_iterator = paginator.paginate()
@@ -166,7 +174,6 @@ def retreiveTaggedAsgList(session, tag_key = 'none', tag_value = 'none'):
     return asgNameList
 
 def retreiveAllAsgList(session):
-
     client = session.client('autoscaling')
     paginator = client.get_paginator('describe_auto_scaling_groups')
     asg_iterator = paginator.paginate()
@@ -177,7 +184,6 @@ def retreiveAllAsgList(session):
     return asgNameList
 
 def retreiveInstancesToTerminateList(session, asgNameList):
-
     instance_ids=[]
     asgclient = session.client('autoscaling')
 
@@ -188,7 +194,6 @@ def retreiveInstancesToTerminateList(session, asgNameList):
     return instance_ids
 
 def retrieveTaggedInstancesList(session, tag_key = 'none', tag_value = 'none'):
-
     ec2resource = session.resource('ec2')
     instanceIds = []
     filters = [{'Name': 'tag:'+tag_key, 'Values': [tag_value]}]
@@ -197,7 +202,6 @@ def retrieveTaggedInstancesList(session, tag_key = 'none', tag_value = 'none'):
     return instanceIds
 
 def retrieveAllStandaloneInstances(session):
-
     ec2resource = session.resource('ec2')
 
     # get a list of all instances
@@ -212,7 +216,6 @@ def retrieveAllStandaloneInstances(session):
     return instances_id_to_stop
 
 def stopInstances(session, ec2instanceIds):
-
     # Pay attention here because using filter with empty list will return all the instances !!!
     if ec2instanceIds:
         ec2 = session.resource('ec2')
@@ -223,7 +226,6 @@ def stopInstances(session, ec2instanceIds):
         print("No instance to stop")
 
 def startInstances(session, ec2instanceIds):
-
     # Pay attention here because using filter with empty list will return all the instances !!!
     if ec2instanceIds:
         ec2 = session.resource('ec2')
@@ -234,7 +236,6 @@ def startInstances(session, ec2instanceIds):
         print("No instance to start")
 
 def terminateInstances(session, ec2instanceIds):
-
     # Pay attention here because using filter with empty list will return all the instances !!!
     if ec2instanceIds:
         ec2 = session.resource('ec2')
@@ -245,7 +246,6 @@ def terminateInstances(session, ec2instanceIds):
         print("No instance to terminate")
 
 def isExistsAsg(session, asgName):
-
     asgclient = session.client('autoscaling')
     asgList = asgclient.describe_auto_scaling_groups(AutoScalingGroupNames=[asgName])
     if not asgList.get('AutoScalingGroups'):
@@ -281,7 +281,6 @@ def filterRdsClustersByStatus(rdsClusters, Status="none"):
     return filteredRdsClusterList
 
 def listTaggedRdsClusters(session, tag_key = 'none', tag_value = 'none'):
-
     client = session.client('rds')
     dbs = client.describe_db_clusters()
 
