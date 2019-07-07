@@ -207,7 +207,7 @@ Resources:
       FunctionName: !Sub '${TagApp}-launcher'
       Handler: "hypnos-launcher.lambda_handler"
       MemorySize: 128
-      Role: !Sub ${HypnosLauncherLambdaRole.Arn}
+      Role: !GetAtt HypnosLauncherLambdaRole.Arn
       Runtime: "python3.7"
       Timeout: 60
       Environment:
